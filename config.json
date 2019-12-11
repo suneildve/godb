@@ -2,10 +2,10 @@
 	"version":"1.0",
 	"server":{
 		"host":"127.0.0.1",
-		"post":8080
+		"post":"8080"
 	},
 	"db":{
-			"mysql":"root:zhych8612@tcp(127.0.0.1:3306)/godb?charset=utf8"
+			"mysql":"root:123456@tcp(127.0.0.1:3306)/godb?charset=utf8"
 	},
 	
 	"redis":{

@@ -7,6 +7,7 @@ import (
 )
 
 type Config struct {
+	Server 			map[string]string 	`json:"server"`
 	Redis			*RedisConfig 		`json:"redis"`
 	DB 				map[string]string 	`json:"db"`
 	Design			map[string]string 	`json:"design"`
