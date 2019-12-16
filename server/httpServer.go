@@ -35,7 +35,6 @@ type UserLogin struct {
 	Password string `json:"password"`
 }
 
-
 // type User struct {
 // 	ID       int    `json:"id"`
 // 	Name     string `json:"name"`
@@ -51,7 +50,6 @@ type Token struct {
 	Token string `json:"token"`
 }
 
-
 // 'msg': 'success',
 //       'code': 0,
 //       'data': {
@@ -60,54 +58,66 @@ type Token struct {
 // 	  }
 	  
 
-
 func StartHTTP() {
 	var conf = config.GetConfig()
 	if post, ok := conf.Server["post"]; ok {
 		fmt.Println(post)
 	}
-	http.HandleFunc("/login", LoginHandler)
-	http.HandleFunc("/register", RegisterHandler)
-	http.Handle("/user", negroni.New(
-		negroni.HandlerFunc(ValidateTokenMiddleware),
-		negroni.Wrap(http.HandlerFunc(ProtectedHandler)),
-	))
-	log.Println("Now listening...")
+	http.HandleFunc("/login", cors(LoginHandler))
+	http.HandleFunc("/register", cors(RegisterHandler))
+	http.Handle("/user",negroni.New(negroni.HandlerFunc(ValidateTokenMiddleware),negroni.Wrap(cors(http.HandlerFunc(ProtectedHandler)))))
+	log.Println("Now listening...3001")
 	http.ListenAndServe(":3001", nil)
 }
 
-func SetAllowOrigi(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")             //允许访问所有域
-	w.Header().Set("Access-Control-Allow-Methods","POST, GET, OPTIONS, DELETE, PATCH, PUT, HEAD")
-	w.Header().Add("Access-Control-Allow-Headers", "Content-Type, Content-Length, auth-token, Accept, X-Requested-With") //header的类型
-	w.Header().Set("content-type", "application/json;charset=utf-8")             //返回数据格式是json
+
+
+
+func cors(f http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")  // 允许访问所有域，可以换成具体url，注意仅具体url才能带cookie信息
+		w.Header().Add("Access-Control-Allow-Headers", "Content-Type,AccessToken,X-CSRF-Token, Authorization, Token") //header的类型
+		w.Header().Add("Access-Control-Allow-Credentials", "true") //设置为true，允许ajax异步请求带cookie信息
+		w.Header().Add("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE") //允许请求方法
+		w.Header().Set("content-type", "application/x-www-form-urlencoded")             //返回数据格式是json
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		f(w, r)
+	}
 }
 
-func IndexHandler(w http.ResponseWriter, r *http.Request) {
-	SetAllowOrigi(w,r)
-	// json, err := json.Marshal(response)
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
+func SetAllowOrigi(w http.ResponseWriter, r *http.Request) {
+	// w.Header().Set("Access-Control-Allow-Origin", "*")             //允许访问所有域
+	// w.Header().Set("Access-Control-Allow-Origin", "*")             //允许访问所有域
+	// w.Header().Set("Access-Control-Allow-Methods","POST, GET, OPTIONS, DELETE, PATCH, PUT, HEAD")
+	// w.Header().Add("Access-Control-Allow-Headers", "Content-Type, Content-Length, auth-token, Accept, X-Requested-With") //header的类型
+	// w.Header().Set("content-type", "application/x-www-form-urlencoded")             //返回数据格式是json
 
-	// w.WriteHeader(http.StatusOK)
-	// w.Write(json)
-	w.Write([]byte(`{"code":0}`))
+	w.Header().Set("Access-Control-Allow-Origin", "*")  // 允许访问所有域，可以换成具体url，注意仅具体url才能带cookie信息
+	w.Header().Add("Access-Control-Allow-Headers", "Content-Type,AccessToken,X-CSRF-Token, Authorization, Token") //header的类型
+	w.Header().Add("Access-Control-Allow-Credentials", "true") //设置为true，允许ajax异步请求带cookie信息
+	w.Header().Add("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE") //允许请求方法
+	w.Header().Set("content-type", "application/json;charset=UTF-8")             //返回数据格式是json
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 }
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	auth := r.Header.Get("Authorization")
 	if auth == "" {
-        w.Header().Set("WWW-Authenticate", `Basic realm="Dotcoo User Login"`)
-        w.WriteHeader(http.StatusUnauthorized)
-        // return
-    }
+		w.Header().Set("WWW-Authenticate", `Bearer realm="Dotcoo User Login"`)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 	fmt.Println(auth)
+	w.Write([]byte(`{"code":0}`))
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
-	SetAllowOrigi(w,r)
 	var user UserLogin
 	err := json.NewDecoder(r.Body).Decode(&user)
 	if err != nil {
@@ -115,27 +125,12 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "Error in request")
 		return
 	}
-	// if strings.ToLower(user.Username) != "someone" {
-	// 	if user.Password != "p@ssword" {
-	// 		w.WriteHeader(http.StatusForbidden)
-	// 		fmt.Println("Error logging in")
-	// 		fmt.Fprint(w, "Invalid credentials")
-	// 		return
-	// 	}
-	// }
-
 	token := jwt.New(jwt.SigningMethodHS256)
 	claims := make(jwt.MapClaims)
-	claims["exp"] = time.Now().Add(time.Hour * time.Duration(1)).Unix()
+	claims["exp"] = time.Now().Add(time.Minute * time.Duration(1)).Unix()
 	claims["iat"] = time.Now().Unix()
 	claims["account"] = user.Username
 	token.Claims = claims
-
-	// if err != nil {
-	// 	w.WriteHeader(http.StatusInternalServerError)
-	// 	fmt.Fprintln(w, "Error extracting the key")
-	// 	fatal(err)
-	// }
 
 	tokenString, err := token.SignedString([]byte(SecretKey))
 	if err != nil {
@@ -143,145 +138,32 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Error while signing the token")
 		fatal(err)
 	}
-
 	response := Token{tokenString}
-	json, err := json.Marshal(response)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	
-	w.WriteHeader(http.StatusOK)
-	w.Write(json)
-	// JsonResponse(response, w)
+	JsonResponse(response, w)
 }
-func LoginHandler00(w http.ResponseWriter, r *http.Request) {
-	auth := r.Header.Get("Authorization")
-	if auth == "" {
-        w.Header().Set("WWW-Authenticate", `Basic realm="Dotcoo User Login"`)
-        w.WriteHeader(http.StatusUnauthorized)
-        // return
-    }
-	fmt.Println(auth)
-    // auths := strings.SplitN(auth, " ", 2)
-    // if len(auths) != 2 {
-    //     fmt.Println("error")
-    //     return
-    // }
-	// authMethod := auths[0]
-    // authB64 := auths[1]
-    // switch authMethod {
-    // case "Basic":
-    //     authstr, err := base64.StdEncoding.DecodeString(authB64)
-    //     if err != nil {
-    //         fmt.Println(err)
-    //         // io.WriteString(w, "Unauthorized!\n")
-    //         return
-    //     }
-    //     fmt.Println(string(authstr))
-    //     userPwd := strings.SplitN(string(authstr), ":", 2)
-    //     if len(userPwd) != 2 {
-    //         fmt.Println("error")
-    //         return
-    //     }
-    //     username := userPwd[0]
-    //     password := userPwd[1]
-    //     fmt.Println("Username:", username)
-    //     fmt.Println("Password:", password)
-	// 	fmt.Println()
-	// case "Bearer":
-    //     // authstr, err := base64.StdEncoding.DecodeString(authB64)
-    // default:
-    //     fmt.Println("error")
-    //     return
-    // }
-
-	var user UserCredentials
-	err := json.NewDecoder(r.Body).Decode(&user)
-	if err != nil {
-		w.WriteHeader(http.StatusForbidden)
-		fmt.Fprint(w, "Error in request")
-		return
-	}
-	fmt.Println(user)
-		// w.Write(json)
-	SetAllowOrigi(w,r)
-	
-	// fmt.Fprintf(w, )
-	w.Write([]byte(`{"code":0}`))
-    // fmt.Fprintf(w, "Hello astaxie!") //这个写入到w的是输出到客户端的
-}
-
-
-func StartServer() {
-	http.HandleFunc("/login", LoginHandler)
-	http.HandleFunc("/register", RegisterHandler)
-	http.Handle("/", negroni.New(
-		negroni.HandlerFunc(ValidateTokenMiddleware),
-		negroni.Wrap(http.HandlerFunc(IndexHandler)),
-	))
-	log.Println("Now listening...")
-	http.ListenAndServe(":8080", nil)
-}
-
 
 
 func ProtectedHandler(w http.ResponseWriter, r *http.Request) {
-	SetAllowOrigi(w,r)
 	response := Response{"Gained access to protected resource"}
 	JsonResponse(response, w)
 
 }
 
-func LoginHandler01(w http.ResponseWriter, r *http.Request) {
-	var user UserLogin
-	err := json.NewDecoder(r.Body).Decode(&user)
-	if err != nil {
-		w.WriteHeader(http.StatusForbidden)
-		fmt.Fprint(w, "Error in request")
+func ValidateTokenMiddleware(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")  // 允许访问所有域，可以换成具体url，注意仅具体url才能带cookie信息
+	w.Header().Add("Access-Control-Allow-Headers", "Content-Type,AccessToken,X-CSRF-Token, Authorization, Token") //header的类型
+	w.Header().Add("Access-Control-Allow-Credentials", "true") //设置为true，允许ajax异步请求带cookie信息
+	w.Header().Add("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE") //允许请求方法
+	w.Header().Set("content-type", "application/x-www-form-urlencoded")             //返回数据格式是json
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	// if strings.ToLower(user.Username) != "someone" {
-	// 	if user.Password != "p@ssword" {
-	// 		w.WriteHeader(http.StatusForbidden)
-	// 		fmt.Println("Error logging in")
-	// 		fmt.Fprint(w, "Invalid credentials")
-	// 		return
-	// 	}
-	// }
-
-	token := jwt.New(jwt.SigningMethodHS256)
-	claims := make(jwt.MapClaims)
-	claims["exp"] = time.Now().Add(time.Hour * time.Duration(1)).Unix()
-	claims["iat"] = time.Now().Unix()
-	// claims["name"] = "suneil"
-	token.Claims = claims
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintln(w, "Error extracting the key")
-		fatal(err)
-	}
-
-	tokenString, err := token.SignedString([]byte(SecretKey))
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintln(w, "Error while signing the token")
-		fatal(err)
-	}
-
-	response := Token{tokenString}
-	JsonResponse(response, w)
-
-}
-
-func ValidateTokenMiddleware(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-	SetAllowOrigi(w,r)
 	auth := r.Header.Get("Authorization")
 	if auth == "" {
-        w.Header().Set("WWW-Authenticate", `Basic realm="Dotcoo User Login"`)
+        w.Header().Set("WWW-Authenticate", `Bearer realm="Dotcoo User Login"`)
         w.WriteHeader(http.StatusUnauthorized)
-        // return
+        return
     }
 	fmt.Println(auth)
 	token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor,
@@ -295,12 +177,13 @@ func ValidateTokenMiddleware(w http.ResponseWriter, r *http.Request, next http.H
 		} else {
 			w.WriteHeader(http.StatusUnauthorized)
 			fmt.Fprint(w, "Token is not valid")
+			return
 		}
 	} else {
 		w.WriteHeader(http.StatusUnauthorized)
 		fmt.Fprint(w, "Unauthorized access to this resource")
+		return
 	}
-
 }
 
 func JsonResponse(response interface{}, w http.ResponseWriter) {
